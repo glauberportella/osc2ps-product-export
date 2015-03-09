@@ -33,11 +33,11 @@ The data is ordered by Manufacturer name, product code and product name columns 
 
 Import steps:
 
-1. Creates a multi dimensional array with key = manufacturer name (in lower case) and value as an array with all products from that manufacturer;
+1. Creates a multi dimensional array with key = manufacturer name and value as an array with all products from that manufacturer;
 2. Traverse the created array, find the Manufacturer from Prestashop base, save its ID for futher use
 3. For each product of the manufacturer found
    Create the Prestashop Product instance, persist it;
-   Load the image from OSCommerce url tahat points to products_image value;
+   Load the image from OSCommerce url that points to products_image value;
    Persist the image to Prestashop base relative to the persisted product;
 
 ### TODO LIST

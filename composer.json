@@ -1,0 +1,15 @@
+{
+    "name": "glauberportella/osc2ps-product-export",
+    "description": "Export product data from OSCommerce Milestone 2.2 to Prestashop 1.6 store",
+    "require-dev": {
+        "phpunit/phpunit": "~4.5"
+    },
+    "license": "MIT License",
+    "authors": [
+        {
+            "name": "Glauber Portella",
+            "email": "glauberportella@gmail.com"
+        }
+    ],
+    "require": {}
+}
