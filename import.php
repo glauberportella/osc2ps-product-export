@@ -25,6 +25,25 @@ $fp = fopen($csvToImport, 'r');
 if (!$fp)
 	die('Error when try to open CSV to import.');
 
+// Create export array
+$export = array();
+
 while (($data = fgetcsv($fp, 0, $delimiter, $enclosure, $escape)) !== false) {
-	
+	// threats NULL column value
+	foreach ($data as $k => &$value) {
+		if ($value == 'NULL' || $value == 'null') {
+			$value = null;
+		}
+	}
+
+	$export[strtolower($data[COL_MANUFACTURER_NAME])][] = array(
+			'product_id' 			=> $data[COL_PRODUCT_ID],
+			'product_code' 			=> $data[COL_PRODUCT_CODE],
+			'product_name' 			=> $data[COL_PRODUCT_ID],
+			'product_description' 	=> $data[COL_PRODUCT_ID],
+			'product_price' 		=> $data[COL_PRODUCT_ID],
+			'product_quantity' 		=> $data[COL_PRODUCT_ID],
+			'product_image' 		=> $data[COL_PRODUCT_ID],
+		);
 }
+
