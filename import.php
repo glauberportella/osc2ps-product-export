@@ -25,6 +25,7 @@
 
 // Prestashop Config requirement
 require_once dirname(__FILE__).'/../config/config.inc.php';
+require_once dirname(__FILE__).'/controllers/admin/Osc2PsAdminImportController.php';
 
 // Configuration
 $csvToImport 		= dirname(__FILE__).'/products.csv';
@@ -54,8 +55,10 @@ $export = array();
 
 echo "\n1. READING EXPORT DATA...";
 while (($data = fgetcsv($fp, 0, $delimiter, $enclosure, $escape)) !== false) {
-	if ($firstLineIsHeader)
+	if ($firstLineIsHeader) {
+		$firstLineIsHeader = false;
 		continue;
+	}
 
 	// threats NULL column value
 	foreach ($data as $k => &$value) {
@@ -67,11 +70,11 @@ while (($data = fgetcsv($fp, 0, $delimiter, $enclosure, $escape)) !== false) {
 	$export[$data[COL_MANUFACTURER_NAME]][] = array(
 			'product_id' 			=> $data[COL_PRODUCT_ID],
 			'product_code' 			=> $data[COL_PRODUCT_CODE],
-			'product_name' 			=> $data[COL_PRODUCT_ID],
-			'product_description' 	=> $data[COL_PRODUCT_ID],
-			'product_price' 		=> $data[COL_PRODUCT_ID],
-			'product_quantity' 		=> $data[COL_PRODUCT_ID],
-			'product_image' 		=> $data[COL_PRODUCT_ID],
+			'product_name' 			=> $data[COL_PRODUCT_NAME],
+			'product_description' 	=> $data[COL_PRODUCT_DESCRIPTION],
+			'product_price' 		=> $data[COL_PRODUCT_PRICE],
+			'product_quantity' 		=> $data[COL_PRODUCT_QUANTITY],
+			'product_image' 		=> $data[COL_PRODUCT_IMAGE],
 		);
 }
 
@@ -81,11 +84,11 @@ echo "DONE.\n";
 // import
 echo "2. IMPORTING DATA...";
 $prevManufacturerName = null;
-$manufacturerId = null
+$manufacturerId = null;
 $errors = array();
 $errorCsvData = array();
 foreach ($export as $manufacturerName => $products) {
-	echo sprintf("\n\tIMPORTING '%d' PRODUCTS OF MANUFACTURER '%s'...", count($products), $manufacturerName);
+	echo sprintf("\n\tIMPORTING '%d' PRODUCTS OF MANUFACTURER '%s' ", count($products), $manufacturerName);
 	// manufacturer
 	if ($prevManufacturerName != $manufacturerName) {
 		// get manufacturer id
@@ -94,7 +97,8 @@ foreach ($export as $manufacturerName => $products) {
 	// product
 	foreach ($products as $productData) {
 		// verify if product already exists on PS store
-		Db::getInstance(_PS_USE_SQL_SLAVE_)->execute('SELECT id_product FROM '._DB_PREFIX_.'product WHERE reference = '.$productData['product_code']);
+		$sql = 'SELECT id_product FROM '._DB_PREFIX_.'product WHERE reference = "'.$productData['product_code'].'"';
+		Db::getInstance(_PS_USE_SQL_SLAVE_)->execute($sql);
 		if (Db::getInstance(_PS_USE_SQL_SLAVE_)->numRows() > 0) {
 			continue;
 		}
@@ -112,32 +116,54 @@ foreach ($export as $manufacturerName => $products) {
 		// description
 		$product->description = array();
 		foreach (Language::getLanguages(false) as $lang){
-			$product->description[$lang['id_lang']] = $productData['product_description'];
+			$product->description[$lang['id_lang']] = Tools::purifyHTML($productData['product_description']);
 		}
 		// price
 		$product->price = $productData['product_price'];
 		// stock quantity
-		$product->quantity = $productData['quantity'];
+		$product->quantity = $productData['product_quantity'];
 
 		// manufacturer
 		if ($manufacturerId) {
 			$product->id_manufacturer = $manufacturerId;
 		}
 
-		// persist product		
-		if (!$product->add()) {
+		// persist product
+		try {
+			if (!$product->add()) {
 			// saves add error product to restore csv
 			// add to an array
+				$errorCsvData[] = array_merge(array($manufacturerName), $productData);
+				continue;
+			}
+			$id_product = $product->id;
+		} catch (PrestaShopException $e) {
 			$errorCsvData[] = array_merge(array($manufacturerName), $productData);
 			continue;
 		}
-		$id_product = $product->id;
 
 		// image
 		// copy external image and upload it
 		$productImageUrl = $oscProductImageUrl.'/'.$productData['product_image'];
+		$shops = Shop::getShops(true, null, true);    
 		$image = new Image();
-		if (!$new_path = $image->getPathForCreation()) {
+		$image->id_product = $id_product;
+		$image->position = Image::getHighestPosition($id_product) + 1;
+		$image->cover = true; // or false;
+		if (($image->validateFields(false, true)) === true &&
+			($image->validateFieldsLang(false, true)) === true && $image->add())
+		{
+		    $image->associateTo($shops);
+		    if (!Osc2PsAdminImportController::copyImg($id_product, $image->id, $productImageUrl, 'products', false))
+		    {
+		    	$err_str = 'An error occurred while copying this image: '.$productImageUrl;
+				$errors[] = $err_str;
+		        $image->delete();
+		    }
+		}
+		/*
+		$image = new Image();
+		if (!($new_path = $image->getPathForCreation())) {
 			$err_str = 'An error occurred while attempting to create a new folder.';
 			$errors[] = $err_str;
 		}
@@ -155,19 +181,20 @@ foreach ($export as $manufacturerName => $products) {
 			}
 		}
 		@unlink($tmpName);
-		Hook::exec('actionWatermark', array('id_image' => $image->id, 'id_product' => $id_product));
-		echo "DONE.";
+		Hook::exec('actionWatermark', array('id_image' => $image->id, 'id_product' => $id_product));*/
+		echo ".";
 	}
 
 	$prevManufacturerName = $manufacturerName;
+	echo "DONE.";
 }
 
 // generate error csv data
-$fp = fopen(dirname(__FILE__).'import-errors.csv', 'w');
+$fp = fopen(dirname(__FILE__).'/import-errors.csv', 'w');
 if ($fp) {
 	echo "\nSAVING ERROR CSV FOR RETRY...";
 	foreach ($errorCsvData as $data) {
-		fputcsv($fp, $errorCsvData, ';', '"');
+		fputcsv($fp, $data, ';', '"');
 	}
 	echo "DONE.";
 	fclose($fp);
