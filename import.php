@@ -45,6 +45,15 @@ define('COL_PRODUCT_PRICE', 		5);
 define('COL_PRODUCT_QUANTITY', 		6);
 define('COL_PRODUCT_IMAGE', 		7);
 
+function normalizeReference($ref, $sep = '/', $padChar = '0', $padLen = 5, $padPos = STR_PAD_LEFT)
+{
+	$ref = preg_replace('/[^0-9]/', $sep, $ref);
+	list($prefix, $sufix) = explode($sep, $ref);
+	$prefix = str_pad($prefix, $padLen, $padChar, $padPos);
+	$ref = implode($sep, array($prefix, $sufix));
+	return $ref;
+}
+
 //
 $fp = fopen($csvToImport, 'r');
 if (!$fp)
@@ -104,7 +113,9 @@ foreach ($export as $manufacturerName => $products) {
 		}
 
 		$product = new Product();
-		$product->reference = $productData['product_code'];
+		$product->id_category_default = Categoria::getRootCategory()->id;
+		$product->reference = normalizeReference($productData['product_code']);
+		$product->id_tax_rules_group = 0;
 		// name
 		$link = Tools::link_rewrite($productData['product_name']);
 		$product->name = array();
@@ -161,27 +172,7 @@ foreach ($export as $manufacturerName => $products) {
 		        $image->delete();
 		    }
 		}
-		/*
-		$image = new Image();
-		if (!($new_path = $image->getPathForCreation())) {
-			$err_str = 'An error occurred while attempting to create a new folder.';
-			$errors[] = $err_str;
-		}
-		if (!($tmpName = tempnam(_PS_TMP_IMG_DIR_, 'PS')) || !copy($productImageUrl, $tmpName)) {
-			$err_str = 'An error occurred during the image upload process.';
-			$errors[] = $err_str;
-		} else {
-			$imagesTypes = ImageType::getImagesTypes('products');
-			foreach ($imagesTypes as $k => $image_type)
-			{
-				if (!ImageManager::resize($tmpName, $new_path.'-'.stripslashes($image_type['name']).'.'.$image->image_format, $image_type['width'], $image_type['height'], $image->image_format)) {
-					$err_str = 'An error occurred while copying this image: '.stripslashes($image_type['name']);
-					$errors[] = $err_str;
-				}
-			}
-		}
-		@unlink($tmpName);
-		Hook::exec('actionWatermark', array('id_image' => $image->id, 'id_product' => $id_product));*/
+
 		echo ".";
 	}
 
