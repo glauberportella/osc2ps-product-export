@@ -47,6 +47,9 @@ define('COL_PRODUCT_IMAGE', 		7);
 
 function normalizeReference($ref, $sep = '/', $padChar = '0', $padLen = 5, $padPos = STR_PAD_LEFT)
 {
+	if (empty($ref))
+		return '';
+
 	$ref = preg_replace('/[^0-9]/', $sep, $ref);
 	list($prefix, $sufix) = explode($sep, $ref);
 	$prefix = str_pad($prefix, $padLen, $padChar, $padPos);
@@ -105,16 +108,19 @@ foreach ($export as $manufacturerName => $products) {
 	}
 	// product
 	foreach ($products as $productData) {
-		// verify if product already exists on PS store
-		$sql = 'SELECT id_product FROM '._DB_PREFIX_.'product WHERE reference = "'.$productData['product_code'].'"';
-		Db::getInstance(_PS_USE_SQL_SLAVE_)->execute($sql);
-		if (Db::getInstance(_PS_USE_SQL_SLAVE_)->numRows() > 0) {
-			continue;
+		$reference = normalizeReference($productData['product_code']);
+		if (!empty($reference)) {
+			// verify if product already exists on PS store
+			$sql = 'SELECT id_product FROM '._DB_PREFIX_.'product WHERE reference = "'.$reference.'"';
+			Db::getInstance(_PS_USE_SQL_SLAVE_)->execute($sql);
+			if (Db::getInstance(_PS_USE_SQL_SLAVE_)->numRows() > 0) {
+				continue;
+			}
 		}
 
 		$product = new Product();
-		$product->id_category_default = Categoria::getRootCategory()->id;
-		$product->reference = normalizeReference($productData['product_code']);
+		$product->id_category_default = Category::getRootCategory()->id;
+		$product->reference = $reference;
 		$product->id_tax_rules_group = 0;
 		// name
 		$link = Tools::link_rewrite($productData['product_name']);
@@ -165,7 +171,30 @@ foreach ($export as $manufacturerName => $products) {
 			($image->validateFieldsLang(false, true)) === true && $image->add())
 		{
 		    $image->associateTo($shops);
-		    if (!Osc2PsAdminImportController::copyImg($id_product, $image->id, $productImageUrl, 'products', false))
+		    $image->save();
+		    /*
+		    // copy files
+		    $new_path = $image->getPathForCreation();
+		    $tmpName = tempnam(_PS_TMP_IMG_DIR_, 'PS');
+		    if (!$tmpName || !copy($productImageUrl, $tmpName)) {
+				$err_str = 'An error occurred while copying this image: '.$productImageUrl;
+				$errors[] = $err_str;
+		        $image->delete();
+			} else {
+				$imagesTypes = ImageType::getImagesTypes('products');
+				foreach ($imagesTypes as $k => $image_type)
+				{
+					if (!ImageManager::resize($tmpName, $new_path.'-'.stripslashes($image_type['name']).'.'.$image->image_format, $image_type['width'], $image_type['height'], $image->image_format)) {
+						$err_str = 'An error occurred while resize '.$productImageUrl.' to: '.stripslashes($image_type['name']);
+						$errors[] = $err_str;
+					}
+					if (file_exists($tmpName)) {
+						@unlink($tmpName);
+					}
+				}
+			}
+			*/
+		    if (!Osc2PsAdminImportController::copyImg($id_product, $image->id, $productImageUrl, 'products', true))
 		    {
 		    	$err_str = 'An error occurred while copying this image: '.$productImageUrl;
 				$errors[] = $err_str;
